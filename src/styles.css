@@ -143,25 +143,130 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 /* ---------- Modals & toast ---------- */
 .modal-layer { position: fixed; inset: 0; z-index: 2; display: grid; place-items: center; padding: 20px; }
 .modal-backdrop { position: absolute; inset: 0; background: #03040ab8; backdrop-filter: blur(3px); }
-.modal { z-index: 1; width: min(100%, 410px); background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 22px; box-shadow: 0 26px 70px #00000080; animation: pop .18s ease-out both; }
+.modal { z-index: 1; width: min(100%, 430px); background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 22px; box-shadow: 0 26px 70px #00000080; animation: pop .18s ease-out both; }
 .modal-title { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
 .modal-title h2 { margin: 0; font-family: 'Space Grotesk', sans-serif; font-size: 18px; letter-spacing: -.2px; color: var(--text); }
 .modal-form > p, .manage-panel > p { color: var(--text-dim); font-size: 13px; line-height: 1.45; margin: -4px 0 1px; }
 .toast { position: fixed; z-index: 3; bottom: 24px; right: 24px; background: var(--surface-2); border: 1px solid var(--border); color: var(--text); max-width: min(360px, calc(100vw - 48px)); padding: 12px 12px 12px 15px; border-radius: 10px; box-shadow: 0 16px 40px #00000060; font-size: 13px; display: flex; align-items: center; gap: 14px; animation: toast-in .2s ease-out both; }
 .toast button { border: 0; color: var(--text-dim); background: transparent; display: grid; place-items: center; }
 
-/* ---------- Manage group ---------- */
-.manage-panel { display: grid; gap: 15px; }
-.member-form { display: grid; grid-template-columns: minmax(0, 1fr) 98px auto; gap: 7px; }
-.member-form .primary { padding: 9px 11px; }
-.member-list { border-top: 1px solid var(--border-soft); padding-top: 13px; max-height: 260px; overflow: auto; }
-.member-heading { color: var(--text-faint); display: block; margin: 0 0 6px; font-size: 11px; font-weight: 600; }
-.member-row { display: flex; align-items: center; gap: 9px; padding: 7px 2px; }
-.member-name { min-width: 0; flex: 1; color: var(--text); font-size: 13px; text-transform: capitalize; }
-.member-name small { display: block; margin-top: 2px; color: var(--text-faint); font-size: 10px; text-transform: none; }
-.member-empty { color: var(--text-faint); font-size: 13px; }
-.remove-member { border: 0; color: var(--danger); background: transparent; padding: 6px; border-radius: 6px; display: grid; place-items: center; }
+/* ---------- Manage Group Panel ---------- */
+.manage-panel { display: grid; gap: 16px; }
+
+.group-setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+}
+.setting-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text);
+  font-weight: 500;
+}
+.setting-select {
+  padding: 6px 10px;
+  font-size: 12px;
+  border-radius: 6px;
+  background: var(--surface) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--border);
+  outline: none;
+  cursor: pointer;
+}
+.setting-select:focus {
+  border-color: var(--cyan);
+}
+
+.member-form { display: grid; grid-template-columns: minmax(0, 1fr) 110px auto; gap: 8px; }
+.member-form .primary { padding: 9px 12px; }
+
+.member-list { border-top: 1px solid var(--border-soft); padding-top: 14px; max-height: 260px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+.member-heading { color: var(--text-faint); display: block; margin: 0 0 6px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+
+.member-row { 
+  display: flex; 
+  align-items: center; 
+  gap: 12px; 
+  padding: 8px 10px; 
+  background: var(--surface-2); 
+  border: 1px solid var(--border-soft); 
+  border-radius: 9px; 
+}
+.member-name { min-width: 0; flex: 1; color: var(--text); font-size: 13px; font-weight: 500; }
+.member-name small { display: block; margin-top: 2px; color: var(--text-faint); font-size: 11px; font-weight: 400; }
+.member-empty { color: var(--text-faint); font-size: 13px; margin: 8px 0; }
+
+.member-role-select {
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 6px;
+  background-color: var(--surface) !important;
+  border: 1px solid var(--border);
+  color: var(--text) !important;
+  cursor: pointer;
+  outline: none;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.member-role-select option {
+  background-color: var(--surface-2);
+  color: var(--text);
+}
+.member-role-select:focus {
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 2px #2fd8e826;
+}
+
+.remove-member { 
+  border: 0; 
+  color: var(--danger); 
+  background: transparent; 
+  padding: 6px; 
+  border-radius: 6px; 
+  display: grid; 
+  place-items: center; 
+  transition: background-color .15s ease;
+}
 .remove-member:hover { background: var(--danger-bg); }
+
+.danger-zone {
+  border-top: 1px solid var(--border-soft);
+  padding-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.delete-group-button {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--danger);
+  background-color: var(--danger-bg) !important;
+  color: var(--danger) !important;
+  font-size: 13px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: background-color .15s ease, opacity .15s ease;
+}
+.delete-group-button:hover:not(:disabled) {
+  background-color: #521d2c !important;
+}
+.delete-group-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
 
 /* ---------- Motion ---------- */
 @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }

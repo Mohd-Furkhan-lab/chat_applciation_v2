@@ -2,32 +2,69 @@
 // Set VITE_API_URL when deploying behind a different API host.
 const API_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
 
-async function request(path, options = {}) {
-  const response = await fetch(`${API_URL}${path}`, {
+async function request(path, options = {}, isRetry = false) {
+  const finalOptions = {
     credentials: 'include',
     headers: { 'Content-Type': 'application/json', ...options.headers },
     ...options,
-  })
-  const data = await response.json().catch(() => ({}))
-  if (!response.ok) throw new Error(data.detail || data.message || 'Something went wrong.')
-  return data
+  }
+
+  try {
+    const response = await fetch(`${API_URL}${path}`, finalOptions)
+    const data = await response.json().catch(() => ({}))
+
+    if (!response.ok) {
+      if (
+        response.status === 401 && 
+        !isRetry && 
+        !path.includes('/users/login') && 
+        !path.includes('/users/refresh') && 
+        !path.includes('/users/signup')
+      ) {
+        try {
+          await request('/users/refresh', { method: 'POST' }, true)
+          return await request(path, options, true)
+        } catch (refreshErr) {
+          // Fall through
+        }
+      }
+
+      throw new Error(data.detail || data.message || 'Something went wrong.')
+    }
+    return data
+  } catch (err) {
+    throw err
+  }
 }
 
 export const api = {
+  // Users
   signUp: (email, password) => request('/users/signup', { method: 'POST', body: JSON.stringify({ email, password }) }),
   signIn: (email, password) => request('/users/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
   signOut: () => request('/users/logout', { method: 'POST' }),
+  refresh: () => request('/users/refresh', { method: 'POST' }),
   me: () => request('/users/me'),
+
+  // Direct Chats
   contacts: () => request('/chat/contacts'),
   addContact: (username) => request(`/chat/${encodeURIComponent(username)}`, { method: 'POST' }),
   messages: (username) => request(`/chat/${encodeURIComponent(username)}`),
   sendMessage: (to, msg) => request('/chat/send-msg', { method: 'POST', body: JSON.stringify({ to, msg }) }),
+  clearChat: (username) => request(`/chat/clear-chat/${encodeURIComponent(username)}`, { method: 'DELETE' }),
+
+  // Groups
   groups: () => request('/groups/'),
+  getGroup: (groupname) => request(`/groups/${encodeURIComponent(groupname)}`),
   createGroup: (gname, type) => request('/groups/', { method: 'POST', body: JSON.stringify({ gname, type }) }),
+  updateGroupType: (gname, new_type) => request('/groups/', { method: 'PUT', body: JSON.stringify({ gname, new_type }) }),
   joinGroup: (groupname) => request(`/groups/members/${encodeURIComponent(groupname)}`, { method: 'POST' }),
   groupMessages: (groupname) => request(`/groups/${encodeURIComponent(groupname)}/chat`),
   sendGroupMessage: (groupname, msg) => request(`/groups/${encodeURIComponent(groupname)}/chat`, { method: 'POST', body: JSON.stringify({ msg }) }),
+
+  // Admin
   groupMembers: (groupname) => request(`/admin/${encodeURIComponent(groupname)}/members`),
   addGroupMember: (groupname, username, role = 'member') => request(`/admin/${encodeURIComponent(groupname)}/members`, { method: 'POST', body: JSON.stringify({ username, role }) }),
+  updateMemberRole: (groupname, username, new_role) => request(`/admin/${encodeURIComponent(groupname)}/members/role`, { method: 'PUT', body: JSON.stringify({ username, new_role }) }),
   removeGroupMember: (groupname, username) => request(`/admin/${encodeURIComponent(groupname)}/members/${encodeURIComponent(username)}`, { method: 'DELETE' }),
+  deleteGroup: (groupname) => request(`/admin/${encodeURIComponent(groupname)}`, { method: 'DELETE' }),
 }
