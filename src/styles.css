@@ -96,8 +96,10 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .socket-state.reconnecting { color: var(--warn); }
 
 .messages { overflow-y: auto; flex: 1; padding: 36px clamp(24px, 7vw, 116px); display: flex; flex-direction: column; gap: 18px; scrollbar-color: #2c2e40 transparent; }
-.message { max-width: min(600px, 80%); animation: slide-up .2s ease-out both; }
-.message.mine { align-self: flex-end; }
+.message-row { display: flex; align-items: flex-end; gap: 8px; max-width: min(600px, 80%); animation: slide-up .2s ease-out both; align-self: flex-start; }
+.message-row.mine { align-self: flex-end; flex-direction: row-reverse; }
+.message-avatar { width: 26px; height: 26px; font-size: 10px; margin-bottom: 2px; }
+.message { max-width: 100%; min-width: 0; }
 .message-meta { color: var(--text-faint); display: flex; gap: 8px; align-items: baseline; margin: 0 0 5px 2px; font-size: 12px; }
 .message.mine .message-meta { justify-content: flex-end; }
 .message-meta span { color: var(--text-dim); font-weight: 600; }

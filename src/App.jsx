@@ -47,7 +47,7 @@ const toContact = (entry) => {
   if (entry && typeof entry === 'object') {
     return {
       name: entry.username || entry.user_name || entry.name || '',
-      profile_pic: entry.profile_pic || entry.profilePic || null,
+      profile_pic: entry.pfp || entry.profile_pic || entry.profilePic || null,
     }
   }
   return { name: String(entry ?? ''), profile_pic: null }
@@ -364,6 +364,16 @@ export default function App() {
   const signOut = async () => { try { await api.signOut() } finally { setUser(null); setActive(null) } }
   const items = tab === 'chats' ? contacts : groups.map(name => ({ name, profile_pic: null }))
   const activePic = tab === 'chats' ? contacts.find(c => c.name === active)?.profile_pic : null
+
+  // Messages may now carry the sender's pfp directly (profile_pic / profilePic).
+  // Fall back to what we already know: our own pic, or the other contact's pic in a DM.
+  const messagePic = (message) => {
+    const direct = message.pfp || message.profile_pic || message.profilePic
+    if (direct) return direct
+    if (message.sender === user.user_name) return user.profile_pic
+    if (tab === 'chats') return activePic
+    return null
+  }
   const chatsUnreadTotal = sumUnread(unreadChats)
   const groupsUnreadTotal = sumUnread(unreadGroups)
 
@@ -449,12 +459,18 @@ export default function App() {
               {loadingMessages ? (
                 <div className="loading">Loading messages…</div>
               ) : messages.length ? (
-                messages.map((message, index) => (
-                  <article key={`${message.timestamp}-${index}`} className={`message ${message.sender === user.user_name ? 'mine' : ''}`}>
-                    <div className="message-meta"><span>{message.sender === user.user_name ? 'You' : displayName(message.sender)}</span><time>{time(message.timestamp)}</time></div>
-                    <p>{message.msg || message.content}</p>
-                  </article>
-                ))
+                messages.map((message, index) => {
+                  const mine = message.sender === user.user_name
+                  return (
+                    <div key={`${message.timestamp}-${index}`} className={`message-row ${mine ? 'mine' : ''}`}>
+                      <Avatar name={message.sender} src={messagePic(message)} className="message-avatar" />
+                      <article className={`message ${mine ? 'mine' : ''}`}>
+                        <div className="message-meta"><span>{mine ? 'You' : displayName(message.sender)}</span><time>{time(message.timestamp)}</time></div>
+                        <p>{message.msg || message.content}</p>
+                      </article>
+                    </div>
+                  )
+                })
               ) : (
                 <div className="first-message">
                   {tab === 'groups'
@@ -714,10 +730,11 @@ function ManageGroupModal({ group, onClose, onGroupDeleted }) {
               const name = isArray ? member[0] : member.username
               const joinedAt = isArray ? member[1] : member.joined_at
               const currentRole = isArray ? (member[2] || 'member') : (member.role || 'member')
+              const pic = isArray ? null : (member.pfp || member.profile_pic || member.profilePic || null)
 
               return (
                 <div className="member-row" key={name}>
-                  <span className="avatar">{initials(name)}</span>
+                  <Avatar name={name} src={pic} />
                   <span className="member-name">
                     {displayName(name)}
                     {joinedAt && <small>Joined {new Date(joinedAt).toLocaleDateString()}</small>}
