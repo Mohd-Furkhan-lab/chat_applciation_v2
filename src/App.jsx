@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowUp, ChevronDown, Hash, LogOut, MessageCircle, Plus, RefreshCw, Shield, Trash2, UserPlus, Users, X, Globe, Lock } from 'lucide-react'
+import { ArrowUp, Camera, ChevronDown, Hash, LogOut, MessageCircle, Plus, RefreshCw, Shield, Trash2, UserPlus, Users, X, Globe, Lock } from 'lucide-react'
 import { api } from './api'
 
 class SoundFX {
@@ -28,10 +28,62 @@ class SoundFX {
   static receive() { this.playChime(880) }
 }
 
-const initials = (name = '') => name.slice(0, 2).toUpperCase() || '?'
-const displayName = (name = '') => name.replace(/[._-]/g, ' ')
+// Usernames are shown exactly as stored — nothing is stripped or rewritten.
+const displayName = (name = '') => String(name ?? '')
+
+// Initials only; separators act as word boundaries so "Cosmic%Leopard" -> "CL".
+const initials = (name = '') => {
+  const words = String(name).split(/[^\p{L}\p{N}]+/u).filter(Boolean)
+  if (!words.length) return '?'
+  const letters = words.length > 1 ? words[0][0] + words[1][0] : words[0].slice(0, 2)
+  return letters.toUpperCase()
+}
 const time = (value) => value ? new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(new Date(value)) : ''
 const sumUnread = (map) => Object.values(map).reduce((total, count) => total + count, 0)
+
+// The contacts endpoint may hand back plain usernames or richer objects.
+// Normalise both into { name, profile_pic } so the list renders the same way.
+const toContact = (entry) => {
+  if (entry && typeof entry === 'object') {
+    return {
+      name: entry.username || entry.user_name || entry.name || '',
+      profile_pic: entry.profile_pic || entry.profilePic || null,
+    }
+  }
+  return { name: String(entry ?? ''), profile_pic: null }
+}
+
+function Avatar({ name, src, className = '', size, onClick }) {
+  const [broken, setBroken] = useState(false)
+  useEffect(() => { setBroken(false) }, [src])
+
+  const classes = `avatar ${className}`.trim()
+  const style = size ? { width: size, height: size } : undefined
+
+  if (src && !broken) {
+    const image = <img src={src} alt="" className={`${classes} avatar-img`} style={style} onError={() => setBroken(true)} />
+    if (!onClick) return image
+    return (
+      <button type="button" className="avatar-trigger" onClick={onClick} aria-label={`View ${displayName(name)}'s picture`}>
+        {image}
+      </button>
+    )
+  }
+
+  return <span className={classes} style={style}>{initials(name)}</span>
+}
+
+function PhotoLightbox({ src, onClose }) {
+  return (
+    <div className="modal-layer lightbox-layer" role="dialog" aria-modal="true">
+      <div className="modal-backdrop" onClick={onClose} />
+      <div className="lightbox">
+        <button className="icon-button lightbox-close" onClick={onClose} aria-label="Close"><X size={18} /></button>
+        <img src={src} alt="Profile picture" />
+      </div>
+    </div>
+  )
+}
 
 function Modal({ title, children, onClose }) {
   return (
@@ -101,13 +153,16 @@ function Auth({ onAuthenticated }) {
 export default function App() {
   const [user, setUser] = useState(null), [tab, setTab] = useState('chats'), [contacts, setContacts] = useState([]), [groups, setGroups] = useState([]), [active, setActive] = useState(null), [messages, setMessages] = useState([]), [loadingMessages, setLoadingMessages] = useState(false), [composer, setComposer] = useState(''), [modal, setModal] = useState(null), [notice, setNotice] = useState(''), [socketStatus, setSocketStatus] = useState('connecting'), [profileOpen, setProfileOpen] = useState(false)
   const [unreadChats, setUnreadChats] = useState({}), [unreadGroups, setUnreadGroups] = useState({})
+  const [viewingPhoto, setViewingPhoto] = useState(null), [photoBusy, setPhotoBusy] = useState(false)
   const activeRef = useRef(active), tabRef = useRef(tab), userRef = useRef(user)
   const groupSocketsRef = useRef({})
   const messagesEndRef = useRef(null)
+  const fileInputRef = useRef(null)
 
   const loadLists = useCallback(async () => {
     const [contactResult, groupResult] = await Promise.allSettled([api.contacts(), api.groups()])
-    setContacts(contactResult.status === 'fulfilled' ? (contactResult.value.chats || []) : [])
+    const rawContacts = contactResult.status === 'fulfilled' ? (contactResult.value.chats || []) : []
+    setContacts(rawContacts.map(toContact))
     setGroups(groupResult.status === 'fulfilled' ? (groupResult.value || []) : [])
   }, [])
 
@@ -154,7 +209,7 @@ export default function App() {
           const incoming = JSON.parse(event.data)
           if (!incoming.from || !incoming.message) return
           SoundFX.receive()
-          setContacts(old => old.includes(incoming.from) ? old : [...old, incoming.from])
+          setContacts(old => old.some(c => c.name === incoming.from) ? old : [...old, toContact(incoming.from)])
           const isOpenHere = tabRef.current === 'chats' && activeRef.current === incoming.from
           if (isOpenHere) {
             setMessages(old => [...old, { msg: incoming.message, sender: incoming.from, timestamp: new Date().toISOString() }])
@@ -252,7 +307,7 @@ export default function App() {
     if (!window.confirm(`Are you sure you want to clear chat history with ${displayName(target)}?`)) return
     try {
       await api.clearChat(target)
-      setContacts(old => old.filter(c => c !== target))
+      setContacts(old => old.filter(c => c.name !== target))
       setUnreadChats(old => {
         const copy = { ...old }
         delete copy[target]
@@ -285,8 +340,30 @@ export default function App() {
     messagesEndRef.current?.scrollIntoView({ block: 'end' })
   }, [messages, loadingMessages])
 
+  const handlePhotoChange = async event => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      setNotice('Please choose an image file')
+      return
+    }
+    setPhotoBusy(true)
+    try {
+      await api.uploadProfilePic(file)
+      const profile = await api.me()
+      setUser(profile)
+      setNotice('Profile picture updated')
+    } catch (e) {
+      setNotice(e.message || 'Failed to upload profile picture')
+    } finally {
+      setPhotoBusy(false)
+    }
+  }
+
   const signOut = async () => { try { await api.signOut() } finally { setUser(null); setActive(null) } }
-  const items = tab === 'chats' ? contacts : groups
+  const items = tab === 'chats' ? contacts : groups.map(name => ({ name, profile_pic: null }))
+  const activePic = tab === 'chats' ? contacts.find(c => c.name === active)?.profile_pic : null
   const chatsUnreadTotal = sumUnread(unreadChats)
   const groupsUnreadTotal = sumUnread(unreadGroups)
 
@@ -299,18 +376,35 @@ export default function App() {
           <div className="brand"><span className="brand-mark"><MessageCircle size={18} /></span><span>thread</span></div>
         </div>
         <div className="profile-area">
-          <button className="profile profile-trigger" onClick={() => setProfileOpen(open => !open)} aria-expanded={profileOpen}>
-            <span className="avatar self">{initials(user.user_name)}</span>
-            <span className="profile-copy"><strong>{displayName(user.user_name)}</strong><small>{user.email}</small></span>
-            <ChevronDown className={profileOpen ? 'chevron-up' : ''} size={16} />
-          </button>
+          <div className="profile">
+            <button
+              type="button"
+              className="avatar-trigger"
+              onClick={() => (user.profile_pic ? setViewingPhoto(user.profile_pic) : fileInputRef.current?.click())}
+              aria-label={user.profile_pic ? 'View profile picture' : 'Upload profile picture'}
+            >
+              {user.profile_pic ? (
+                <img src={user.profile_pic} alt={displayName(user.user_name)} className="avatar avatar-img self" />
+              ) : (
+                <span className="avatar self">{initials(user.user_name)}</span>
+              )}
+            </button>
+            <button className="profile-trigger" onClick={() => setProfileOpen(open => !open)} aria-expanded={profileOpen}>
+              <span className="profile-copy"><strong>{displayName(user.user_name)}</strong><small>{user.email}</small></span>
+              <ChevronDown className={profileOpen ? 'chevron-up' : ''} size={16} />
+            </button>
+          </div>
           {profileOpen && (
             <div className="profile-menu">
               <span className="profile-menu-email">Signed in as {user.email}</span>
+              <button onClick={() => { fileInputRef.current?.click(); setProfileOpen(false) }} disabled={photoBusy}>
+                <Camera size={16} />{photoBusy ? 'Uploading…' : user.profile_pic ? 'Change photo' : 'Add photo'}
+              </button>
               <button onClick={() => { loadLists(); setProfileOpen(false) }}><RefreshCw size={16} />Refresh conversations</button>
               <button className="profile-signout" onClick={signOut}><LogOut size={16} />Sign out</button>
             </div>
           )}
+          <input ref={fileInputRef} type="file" accept="image/*" className="visually-hidden" onChange={handlePhotoChange} />
         </div>
         <nav className="tabs">
           <button className={tab === 'chats' ? 'active' : ''} onClick={() => setTab('chats')}><MessageCircle size={18} />Messages{chatsUnreadTotal > 0 && <span className="tab-dot" />}</button>
@@ -321,11 +415,13 @@ export default function App() {
           <button className="icon-button" onClick={() => setModal(tab === 'chats' ? 'contact' : 'group')} aria-label="Create"><Plus size={18} /></button>
         </div>
         <div className="thread-list">
-          {items.map(name => {
+          {items.map(({ name, profile_pic }) => {
             const count = tab === 'chats' ? unreadChats[name] : unreadGroups[name]
             return (
               <button key={name} className={`thread-row ${active === name ? 'selected' : ''}`} onClick={() => openThread(name)}>
-                <span className={`avatar ${tab === 'groups' ? 'group-avatar' : ''}`}>{tab === 'groups' ? <Hash size={16} /> : initials(name)}</span>
+                {tab === 'groups'
+                  ? <span className="avatar group-avatar"><Hash size={16} /></span>
+                  : <Avatar name={name} src={profile_pic} />}
                 <span className="thread-name">{displayName(name)}</span>
                 {!!count && <span className="unread-badge">{count > 9 ? '9+' : count}</span>}
               </button>
@@ -361,7 +457,9 @@ export default function App() {
                 ))
               ) : (
                 <div className="first-message">
-                  <span className="avatar large">{tab === 'groups' ? <Hash size={24} /> : initials(active)}</span>
+                  {tab === 'groups'
+                    ? <span className="avatar large"><Hash size={24} /></span>
+                    : <Avatar name={active} src={activePic} className="large" onClick={activePic ? () => setViewingPhoto(activePic) : undefined} />}
                   <h2>{displayName(active)}</h2>
                   <p>Start the conversation.</p>
                 </div>
@@ -387,6 +485,7 @@ export default function App() {
       {modal === 'contact' && <ContactModal currentUser={user.user_name} onClose={() => setModal(null)} onCreated={async name => { await loadLists(); setModal(null); setTab('chats'); await openThread(name) }} />}
       {modal === 'group' && <GroupModal onClose={() => setModal(null)} onCreated={async name => { await loadLists(); setModal(null); setTab('groups'); await openThread(name) }} />}
       {modal === 'manage' && <ManageGroupModal group={active} onClose={() => setModal(null)} onGroupDeleted={() => handleGroupDeleted(active)} />}
+      {viewingPhoto && <PhotoLightbox src={viewingPhoto} onClose={() => setViewingPhoto(null)} />}
     </main>
   )
 }

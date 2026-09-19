@@ -3,10 +3,14 @@
 const API_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
 
 async function request(path, options = {}, isRetry = false) {
+  const { headers: customHeaders, ...restOptions } = options
+  // FormData needs the browser to set its own multipart Content-Type (with boundary),
+  // so we skip the default JSON header whenever the body is a FormData instance.
+  const isFormData = typeof FormData !== 'undefined' && restOptions.body instanceof FormData
   const finalOptions = {
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json', ...options.headers },
-    ...options,
+    ...restOptions,
+    headers: isFormData ? { ...customHeaders } : { 'Content-Type': 'application/json', ...customHeaders },
   }
 
   try {
@@ -44,6 +48,11 @@ export const api = {
   signOut: () => request('/users/logout', { method: 'POST' }),
   refresh: () => request('/users/refresh', { method: 'POST' }),
   me: () => request('/users/me'),
+  uploadProfilePic: (file) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return request('/users/profile-pic/upload', { method: 'POST', body: formData })
+  },
 
   // Direct Chats
   contacts: () => request('/chat/contacts'),
