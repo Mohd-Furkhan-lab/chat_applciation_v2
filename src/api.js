@@ -59,6 +59,12 @@ export const api = {
   addContact: (username) => request(`/chat/${encodeURIComponent(username)}`, { method: 'POST' }),
   messages: (username) => request(`/chat/${encodeURIComponent(username)}`),
   sendMessage: (to, msg) => request('/chat/send-msg', { method: 'POST', body: JSON.stringify({ to, msg }) }),
+  sendMedia: (to, file) => {
+    const formData = new FormData()
+    formData.append('to', to)
+    formData.append('file', file)
+    return request('/chat/send-media', { method: 'POST', body: formData })
+  },
   clearChat: (username) => request(`/chat/clear-chat/${encodeURIComponent(username)}`, { method: 'DELETE' }),
 
   // Groups
@@ -69,9 +75,20 @@ export const api = {
   joinGroup: (groupname) => request(`/groups/members/${encodeURIComponent(groupname)}`, { method: 'POST' }),
   groupMessages: (groupname) => request(`/groups/${encodeURIComponent(groupname)}/chat`),
   sendGroupMessage: (groupname, msg) => request(`/groups/${encodeURIComponent(groupname)}/chat`, { method: 'POST', body: JSON.stringify({ msg }) }),
+  sendGroupMedia: (groupname, file) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return request(`/groups/${encodeURIComponent(groupname)}/media`, { method: 'POST', body: formData })
+  },
 
   // Admin
   groupMembers: (groupname) => request(`/admin/${encodeURIComponent(groupname)}/members`),
+  groupInfo: (groupname) => request(`/admin/${encodeURIComponent(groupname)}/info`),
+  uploadGroupPfp: (groupname, file) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return request(`/admin/${encodeURIComponent(groupname)}/profile-pic`, { method: 'POST', body: formData })
+  },
   addGroupMember: (groupname, username, role = 'member') => request(`/admin/${encodeURIComponent(groupname)}/members`, { method: 'POST', body: JSON.stringify({ username, role }) }),
   updateMemberRole: (groupname, username, new_role) => request(`/admin/${encodeURIComponent(groupname)}/members/role`, { method: 'PUT', body: JSON.stringify({ username, new_role }) }),
   removeGroupMember: (groupname, username) => request(`/admin/${encodeURIComponent(groupname)}/members/${encodeURIComponent(username)}`, { method: 'DELETE' }),
